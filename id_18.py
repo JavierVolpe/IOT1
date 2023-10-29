@@ -190,7 +190,7 @@ while True:
         # Hvis funktionen returnere en string er den True ellers returnere den False
         gps_data = get_adafruit_gps("Distance")
         if gps_data: 
-            print(f'\nSidste koordinater: {gps_data}') #Viser GPS data i shell 
+#             print(f'\nSidste koordinater: {gps_data}') #Viser GPS data i shell 
             coordinates.append(gps_data) #Tilføjer koordinater til list "coordinates"
             led1.off() #Blinker LED når der kommer GPS data. 
             sleep(0.25)
@@ -204,16 +204,16 @@ while True:
             distance = round(total_distance(coordinates), 8) #TODO: kun 2 decimaler.
             print("Løbet distance:", distance, "mt")
  
-            if distance > 100: #Over 100 mt.: informere Adafruit
+            if distance > 100 and kmcount == 0: #Over 100 mt. / mindre end 1km: informere Adafruit
                 print(f"Distance over 100: sender besked til adafruit. {distance}")
                 if send_distance == 1:
                     mqtt.web_print(distance, distance_feed) #Feed distance
                 if kmcount == 0:
                     print(f"Løbet distance: {distance} mt.")
-                if kmcount != 0:
+            elif kmcount != 0:
                     distance_km_mt = distance * 1000 + kmcount #Distance i mt (gange 1000 til KM) + distance i KM
                     print(f"Løbet KM i alt: {distance_km_mt}")
-                sleep(4)
+            sleep(4)
 
             if distance > 1000: #Distance over 1000: 
                 buzzer.duty(512) #Spiller lyd
@@ -246,13 +246,14 @@ while True:
         
         # Opdatering af batteriniveau til Adafruit i feed "batteryfeed"
         if send_battery == 1:  # Config            
-            battery_percent = round(read_battery_voltage_avg64() / 4.2 * 100, 2) #Beregner batteri niveau ud fra ADC værdi / maks. spændning
+            battery_voltage = round(read_battery_voltage_avg64(), 2)
+            battery_percent = round(battery_voltage / 4.2 * 100, 2) #Beregner batteri niveau ud fra ADC værdi / maks. spændning
             if battery_percent > 100:
                 print("Error: Battery over 100%")
             elif battery_percent < 0:
                 print("Error: Battery under 0%")
             else:
-                print(f"Batteri niveau: {battery_percent}")  # Viser det på shell 
+                print(f"Batteri niveau: {battery_percent} % / {battery_voltage} v")  # Viser det på shell 
                 mqtt.web_print(
                     battery_percent, battery_feed
                 )   # Sender besked til Adafruit med batteri niveau (i feed batteryfeed)
