@@ -81,7 +81,7 @@ def get_distance_gps(): #Funktion fra Kevin Lindemark. Modificeret til at return
 #Haversine funktion(Michael Dunn) kilde: https://stackoverflow.com/questions/4913349/haversine-formula-in-python-bearing-and-distance-between-two-gps-points
 def haversine(lon1, lat1, lon2, lat2):
     """
-    Calculate the great circle distance in kilometers between two points 
+    Calculate the great circle distance in meters between two points 
     on the earth (specified in decimal degrees)
     """
     # convert decimal degrees to radians 
@@ -92,7 +92,7 @@ def haversine(lon1, lat1, lon2, lat2):
     dlat = lat2 - lat1 
     a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
     c = 2 * asin(sqrt(a)) 
-    r = 6371000 # Radius of earth in kilometers. 
+    r = 6371000 # Radius of earth in meters. 
     return c * r
 
 def total_distance(coordinates):
@@ -106,7 +106,7 @@ def total_distance(coordinates):
         lat1, lon1 = coordinates[i]
         lat2, lon2 = coordinates[i + 1]
         total += haversine(lat1, lon1, lat2, lon2)
-    return total #Total i KM
+    return total #Total i MT
 
 
 def parse_coord(coordinates): 
@@ -133,40 +133,40 @@ while True:
         # Hvis funktionen returnere en string er den True ellers returnere den False
         gps_data = get_distance_gps()
         if gps_data: 
-            print(f'\ngps_data er: {gps_data}') #Viser GPS data i shell 
+            print(f'\nGPS_data er: {gps_data}') #Viser GPS data i shell 
             coordinates.append(gps_data) #Tilføjer koordinater til list "coordinates"
-            led1.on() #Blinker LED hurtig når der kommer GPS data. 
+            led1.off() #Blinker LED hurtig når der kommer GPS data. 
             sleep(0.25)
-            led1.off()
+            led1.on()
             sleep(5) #Venter 5 sek. for at læse igen
 
                 
-        if coordinates: #Når der er flere koordinater i listen, beregner det distance
+        if coordinates: #Når der er flere koordinater i listen, beregner det distancen
             print("Start total_distance function: ", coordinates) #Debug info
-            
 
-            # Calculate and print the total distance
+        # Calculate and print the total distance
             distance = round(total_distance(coordinates), 8) #TODO: kun 2 decimaler. Debug: 8
             print("Total Distance:", distance, "mt")
-
-            if distance > 100 and distance < 1000: #Mellem 100 og 1000: informere Adafruit
-                print("Distance over 100: sender besked til adafruit.", distance)
+ 
+            if distance > 100: #Over 100 mt.: informere Adafruit
+                print(f"Distance over 100: sender besked til adafruit. {distance}")
                 if send_distance == 1:
                     mqtt.web_print(distance, 'JavierVo/feeds/distance') #Feed distance
                     print("Distance in meters: ", distance)
                     sleep(4)
 
             elif distance > 1000: #Distance over 1000: 
-                print("Distance over 1000 m. Spiller lyd, sende til adafruit og reset count. ", distance, "KM")
+                print(f"Distance over 1000 m. Spiller lyd, sende til adafruit og reset count. {distance} mt.")
                 buzzer.duty(512) #Spiller lyd
                 buzzer.freq(500)
                 sleep(0.2)
                 buzzer.duty(0)
-                kmcount += 1
+                kmcount += distance
                 print("Km. count: ", kmcount)
+                distance = 0 #Reset distance count
                 
                 if send_distance == 1:
-                    mqtt.web_print(kmcount, 'JavierVo/feeds/distancekm')
+                    mqtt.web_print(kmcount, 'JavierVo/feeds/distancekm') #Distance i KM til feed kmcount
                     sleep(4)
                 coordinates.clear() #Reset list
                 
@@ -175,6 +175,7 @@ while True:
         sleep(2)  #(begrænse af Adafruit til at modtage beskeder)
         led1.off() #YELLOW     
         sleep(2)
+        
         if len(mqtt.besked) != 0: # Her nulstilles indkommende beskeder
             mqtt.besked = ""            
         mqtt.sync_with_adafruitIO() # igangsæt at sende og modtage data med Adafruit IO             
@@ -185,3 +186,4 @@ while True:
         print('Ctrl-C pressed...exiting')
         mqtt.c.disconnect()
         mqtt.sys.exit()
+
