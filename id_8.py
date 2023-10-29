@@ -133,7 +133,7 @@ while True:
         # Hvis funktionen returnere en string er den True ellers returnere den False
         gps_data = get_distance_gps()
         if gps_data: 
-            print(f'\nGPS_data er: {gps_data}') #Viser GPS data i shell 
+            print(f'\nSidste koordinater: {gps_data}') #Viser GPS data i shell 
             coordinates.append(gps_data) #Tilføjer koordinater til list "coordinates"
             led1.off() #Blinker LED hurtig når der kommer GPS data. 
             sleep(0.25)
@@ -155,13 +155,13 @@ while True:
                     print("Distance in meters: ", distance)
                     sleep(4)
 
-            elif distance > 1000: #Distance over 1000: 
+            if distance > 1000: #Distance over 1000:
                 print(f"Distance over 1000 m. Spiller lyd, sende til adafruit og reset count. {distance} mt.")
                 buzzer.duty(512) #Spiller lyd
                 buzzer.freq(500)
                 sleep(0.2)
                 buzzer.duty(0)
-                kmcount += distance
+                kmcount += (distance / 1000)
                 print("Km. count: ", kmcount)
                 distance = 0 #Reset distance count
                 
