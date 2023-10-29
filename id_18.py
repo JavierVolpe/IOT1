@@ -16,7 +16,7 @@
 # # 
 # # Krav 
 # # 
-# # Løsningen skal afspille en lyd, hver gang en spiller løber 1kilometer, samt sende optælling af meter til Adafruit, med et interval på 100meter 
+# # Løsningen skal afspille en lyd, hver gang en spiller løber 1kilometer, samt sende optælling af meter til Adafruit, efter de første 100 meter 
 # # 
 # # Prioritet: 1 
 # # 
@@ -41,38 +41,55 @@
 # # Hvis løsningen afspiller en lyd, og dashboardet laver en optælling med en nøjagtighed på +-10%, er kravet opfyldt 
 
 
-
-import umqtt_robust2 as mqtt #MQTT til at sende beskeder til Adafruit
-from machine import Pin, ADC, UART, PWM #Hardware moduler
+#########################################################################
+# DEPENDENCIES
+import umqtt_robust2 as mqtt 					# MQTT til at sende beskeder til Adafruit
+from machine import Pin, ADC, UART, PWM 		# Hardware moduler
 from time import sleep
-from gps_bare_minimum import GPS_Minimum #Vi bruger GPS functioner, som vi har fået af Kevin
-
-from math import radians, sin, cos, sqrt, asin #Moduler til Haversine formel 
+from gps_bare_minimum import GPS_Minimum 		# GPS functioner af Kevin Lindemark 
+from math import radians, sin, cos, sqrt, asin 	# Moduler til Haversine formel 
 
 #########################################################################
 # CONFIGURATION HARDWARE
-YELLOW_PIN = 15  # PIN nummer til yellow LED - for at vise at programmet kører
-led1 = Pin(YELLOW_PIN, Pin.OUT)  # bruger modul PIN for at sende signal OUT til Pin 15
-
-BUZZ_PIN = 33 #Buzzer PIN
-buzzer = PWM(Pin(BUZZ_PIN, Pin.OUT)) #Initialiserer PWM modul til buzzer 
-buzzer.duty(0) #Mute at start 
-
+YELLOW_PIN = 15  	# PIN nummer til yellow LED - for at vise at programmet kører
+BUZZ_PIN = 33 		# Buzzer PIN
+ 
 #########################################################################
-# CONFIGURATION GPS
-gps_port = 2                               # ESP32 UART port, Educaboard ESP32 default UART port
-gps_speed = 9600                           # UART speed, defauls u-blox speed
+# CONFIGURATION PROGRAM
+
+# GPS
+gps_port 	= 2    			# ESP32 UART port, Educaboard ESP32 default UART port
+gps_speed 	= 9600    		# UART speed, defauls u-blox speed
+
+# Battery
+pin_adc_bat = 35  			# The battery status input pin
+bat_scaling = 4.2 / 3413  	# The battery voltage divider ratio, replace <adc_4v2> with ADC value when 4,2 V applied
+
+# Opdatering til Adafruit 
+send_battery 		= 1		# Hvis 1: sender batteri percentage til Adafruit
+send_location_data 	= 1 	# Hvis 1: sender lokation opdatering til Adafruit
+send_distance 		= 1 	# Hvis 1: sender distancer til Adafruit. 
+
+# Adafruit feeds config:
+distance_feed 	= "JavierVo/feeds/distance"
+distance_km_feed= "JavierVo/feeds/distancekm"
+map_feed 		= "JavierVo/feeds/mapfeed/csv"
+battery_feed 	= "JavierVo/feeds/batteryfeed"
+
+
 #########################################################################
 # OBJECTS
-uart = UART(gps_port, gps_speed)           # UART object creation
-gps = GPS_Minimum(uart)                    # GPS object creation
+uart = UART(gps_port, gps_speed)           	# UART object creation
+gps = GPS_Minimum(uart)                    	# GPS object creation
+led1 = Pin(YELLOW_PIN, Pin.OUT)  			# bruger modul PIN for at sende signal OUT til Pin 15
+buzzer = PWM(Pin(BUZZ_PIN, Pin.OUT)) 		# Initialiserer PWM modul til buzzer 
+buzzer.duty(0) 								# Mute at start
 
-kmcount = 0 		#starter med 0 km
-
-send_distance = 1 #Hvis 1: sender distancer til Adafruit. Hvis 0: viser det kun i shell 
-   
-
-#Haversine funktion(Michael Dunn) kilde: https://stackoverflow.com/questions/4913349/haversine-formula-in-python-bearing-and-distance-between-two-gps-points
+#########################################################################
+# FUNCTIONS
+# # Distance / koordinater
+# Haversine funktion(Michael Dunn) kilde: https://stackoverflow.com/questions/4913349/haversine-formula-in-python-bearing-and-distance-between-two-gps-points
+# Modificeret til at bruge meter
 def haversine(lon1, lat1, lon2, lat2):
     """
     Calculate the great circle distance in meters between two points 
@@ -117,24 +134,17 @@ def parse_coord(coordinates):
     return newcoord #Returnere en list af koordinater
 
 coordinates = [] 	#Start uden koordinater
+kmcount 	= 0 	#Starter med 0 km
 
 # Batteri funktioner:
-# Battery voltage function (Fra Bo)
-bat_adc = ADC(Pin(35))  # The battery status ADC object
-bat_adc.atten(ADC.ATTN_11DB)  # Full range: 3,3 V
-
-# Battery
-pin_adc_bat = 35  # The battery status input pin
-bat_scaling = 4.2 / 3413  # The battery voltage divider ratio, replace <adc_4v2> with ADC value when 4,2 V applied
-
-send_battery = 1  # Hvis 1, så sender battery percentage til AdafruitGPS Function
-
-
-
 #   Reads the battery from a converted ADC value
 #   Input : none
 #   Output: the battery voltage
-# 	Kilde: Bo Hansen
+# 	Kilde: Bo Hansen / Undervisning ILS 1/08
+
+bat_adc = ADC(Pin(pin_adc_bat)) # The battery status ADC object
+bat_adc.atten(ADC.ATTN_11DB)  	# Full range: 3,3 V
+
 def read_battery_voltage_avg64():  # Option: average over N times to remove fluctuations
     adc_val = 0
     for i in range(64):
@@ -142,9 +152,9 @@ def read_battery_voltage_avg64():  # Option: average over N times to remove fluc
     voltage = bat_scaling * (adc_val >> 6)  # >> fast divide by 64
     return voltage
 
-# Funktion til at sende lokation til Adafruit:
-# Kilde: Kevin L. Modificeret til at returnere kun lat + lon, hvis vi skal beregne distancen.
-def get_adafruit_gps(type):
+# Læser lokation til Adafruit:
+# Kilde: Kevin L. - Modificeret til at returnere kun lat + lon, hvis vi skal beregne distancen, ved hjælp af argumenter
+def get_adafruit_gps(type_data):
     speed = lat = lon = None  # Opretter variabler med None som værdi
     if gps.receive_nmea_data():
         # hvis der er kommet end bruggbar værdi på alle der skal anvendes
@@ -159,9 +169,9 @@ def get_adafruit_gps(type):
             lat = str(gps.get_latitude())
             lon = str(gps.get_longitude())
             # returnerer data med adafruit gps format
-            if type == "Location":
+            if type_data == "Location":
                 return speed + "," + lat + "," + lon + "," + "0.0"
-            elif type == "Distance":
+            elif type_data == "Distance":
                 return lat + "," + lon              
                            
         else:  # hvis ikke både hastighed, latitude og longtitude er korrekte
@@ -189,58 +199,53 @@ while True:
 
                 
         if len(coordinates) > 1: #Når der er flere koordinater i listen, beregner det distancen
-            print("Beregner distance mellem koordinater: ", coordinates) 
-
-        # Calculate and print the total distance
+            print(f"Beregner distance mellem koordinater: {coordinates}")
+            
             distance = round(total_distance(coordinates), 8) #TODO: kun 2 decimaler.
             print("Løbet distance:", distance, "mt")
  
-            if distance > 100: #Over 100 mt.: informere Adafruit TODO: back to 100
+            if distance > 100: #Over 100 mt.: informere Adafruit
                 print(f"Distance over 100: sender besked til adafruit. {distance}")
                 if send_distance == 1:
-                    mqtt.web_print(distance, 'JavierVo/feeds/distance') #Feed distance
-                    print(f"Distance i meter: {distance}")
-                    if kmcount != 0:
-                        print(f"Distance KM i alt: {kmcount}")
-                    sleep(4)
+                    mqtt.web_print(distance, distance_feed) #Feed distance
+                if kmcount == 0:
+                    print(f"Løbet distance: {distance} mt.")
+                if kmcount != 0:
+                    distance_km_mt = distance * 1000 + kmcount #Distance i mt (gange 1000 til KM) + distance i KM
+                    print(f"Løbet KM i alt: {distance_km_mt}")
+                sleep(4)
 
-            if distance > 1000: #Distance over 1000: TODO: back to 1000
-
+            if distance > 1000: #Distance over 1000: 
                 buzzer.duty(512) #Spiller lyd
                 buzzer.freq(500)
                 sleep(0.2)
                 buzzer.duty(0)
-                kmcount += (distance / 1000)
-                print(f"Distance over 1000 m. Spiller lyd, sender til adafruit og reset count. {distance} mt. Distance i KM: {kmcount}")
-                distance = 0 #Reset distance(mt) count
+                kmcount += (distance / 1000) #Opdaterer km count 
+                print(f"Distance over 1000 m. Spiller lyd, sender til adafruit og reset count. Distance i KM: {kmcount}")
+                distance = 0 # Reset distance(mt) count
                 
                 if send_distance == 1:
-                    mqtt.web_print(kmcount, 'JavierVo/feeds/distancekm') #Distance i KM til feed kmcount
+                    mqtt.web_print(kmcount, distance_km_feed) # Distance i KM til feed kmcount
                     sleep(4)
                 coordinates.clear() #Reset list
                 
-        #Bruger yellow LED blink til at vise, at programmet kører    
-        led1.on() 
-        sleep(2)  #(begrænse af Adafruit til at modtage beskeder)
-        led1.off() #YELLOW     
+            
+        led1.on() # Bruger yellow LED blink til at vise, at programmet kører
+        sleep(2)  # (begrænse af Adafruit til at modtage beskeder)
+        led1.off()   
         sleep(2)
         
-#         Send lokation til Adafruit:
+        # Send lokation til Adafruit:
         # Hvis funktionen returnere en string er den True ellers returnere den False
         gps_location_data = get_adafruit_gps("Location")
         if gps_location_data:  # hvis der er korrekt data så send til adafruit
             print(f"\nLokation til Adafruit kort: {gps_location_data} (speed, lat, long, alt)")  # Viser GPS data
-            mqtt.web_print(
-                gps_location_data, "JavierVo/feeds/mapfeed/csv"
-            )  # Besked til Adafruit med gps data, til feed mapfeed
-            sleep(4)
+            if send_location_data == 1:
+                mqtt.web_print(gps_location_data, map_feed)  # Besked til Adafruit med gps data, til feed mapfeed
+                sleep(4)
         
-        
-        
-#         Sende batteri niveau til Adafruit
         # Opdatering af batteriniveau til Adafruit i feed "batteryfeed"
-        if send_battery == 1:  # Sender batteriniveau KUN hvis vi aktivere den
-            
+        if send_battery == 1:  # Config            
             battery_percent = round(read_battery_voltage_avg64() / 4.2 * 100, 2) #Beregner batteri niveau ud fra ADC værdi / maks. spændning
             if battery_percent > 100:
                 print("Error: Battery over 100%")
@@ -249,25 +254,20 @@ while True:
             else:
                 print(f"Batteri niveau: {battery_percent}")  # Viser det på shell 
                 mqtt.web_print(
-                    battery_percent, "JavierVo/feeds/batteryfeed"
+                    battery_percent, battery_feed
                 )   # Sender besked til Adafruit med batteri niveau (i feed batteryfeed)
         led1.on()   # YELLOW LED Blink
         sleep(2.5)  # Venter 2x2.5 sek. (begrænse af Adafruit til at modtage beskeder)
         led1.off()  # YELLOW LED Blink
         sleep(2.5)
 
-        
-        
-        
-        
-        
-        
-        if len(mqtt.besked) != 0: # Her nulstilles indkommende beskeder
+
+        if len(mqtt.besked) != 0: 	# Her nulstilles indkommende beskeder
             mqtt.besked = ""            
         mqtt.sync_with_adafruitIO() # igangsæt at sende og modtage data med Adafruit IO             
-        print(".", end = '') # printer et punktum til shell, uden et enter        
+        print(".", end = '') 		# printer et punktum til shell, uden et enter        
 
-# Stopper programmet når der trykkes Ctrl + c
+    # Stopper programmet når der trykkes Ctrl + c
     except KeyboardInterrupt:
         print('Ctrl-C pressed...exiting')
         mqtt.c.disconnect()
