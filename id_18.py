@@ -11,11 +11,9 @@
 
 # # 
 # # ID8  
-# # 
 # # Kategori: Sensing 
 # # 
 # # Krav 
-# # 
 # # Løsningen skal afspille en lyd, hver gang en spiller løber 1kilometer, samt sende optælling af meter til Adafruit, efter de første 100 meter 
 # # 
 # # Prioritet: 1 
@@ -23,21 +21,13 @@
 # # Accepttest:  
 # # 
 # # Step 1) Testbrugeren ifører sig løsningen hardware del, og hardwareløsningen aktiveres 
-# # 
 # # Step 2) Testbrugeren bevæger sig 1,1km 
-# # 
-# # Step 3) Observer om løsningen laver en lyd per kilometer og at dashboardet laver en optælling af meter i et interval af 100meter 
-# # 
-# #   
+# # Step 3) Observer om løsningen laver en lyd per kilometer og at dashboardet laver en optælling af meter i et interval af 100meter   
 # # 
 # # Opfyldt 1) 
-# # 
 # # Hvis løsningen afspiller en lyd indenfor 900 – 1100 meter, og dashboardet laver en optælling indenfor 90-110 meter, er kravet opfyldt 
-# # 
-# #  
-# # 
+
 # # Opfyldt 2)  
-# # 
 # # Hvis løsningen afspiller en lyd, og dashboardet laver en optælling med en nøjagtighed på +-10%, er kravet opfyldt 
 
 
@@ -71,10 +61,10 @@ send_location_data 	= 1 	# Hvis 1: sender lokation opdatering til Adafruit
 send_distance 		= 1 	# Hvis 1: sender distancer til Adafruit. 
 
 # Adafruit feeds config:
-distance_feed 	= "JavierVo/feeds/distance"
-distance_km_feed= "JavierVo/feeds/distancekm"
-map_feed 		= "JavierVo/feeds/mapfeed/csv"
-battery_feed 	= "JavierVo/feeds/batteryfeed"
+distance_feed 		= "JavierVo/feeds/distance"
+distance_km_feed	= "JavierVo/feeds/distancekm"
+map_feed 			= "JavierVo/feeds/mapfeed/csv"
+battery_feed 		= "JavierVo/feeds/batteryfeed"
 
 
 #########################################################################
@@ -84,6 +74,8 @@ gps = GPS_Minimum(uart)                    	# GPS object creation
 led1 = Pin(YELLOW_PIN, Pin.OUT)  			# bruger modul PIN for at sende signal OUT til Pin 15
 buzzer = PWM(Pin(BUZZ_PIN, Pin.OUT)) 		# Initialiserer PWM modul til buzzer 
 buzzer.duty(0) 								# Mute at start
+bat_adc = ADC(Pin(pin_adc_bat)) 			# The battery status ADC object
+bat_adc.atten(ADC.ATTN_11DB)  				# Full range: 3,3 V
 
 #########################################################################
 # FUNCTIONS
@@ -107,13 +99,13 @@ def haversine(lon1, lat1, lon2, lat2):
     return c * r
 
 def total_distance(coordinates):
-    #Total distance. 
-    #Først bruger det parse_coord() til at transformere strings til en liste af lister.
-    #Så tager det hver element i listen, og beregne distance til den næste element, ved at bruge
-    #Haversine funktion. Returnerer distance mellem ALLE koordinater. 
+    # Total distance. 
+    # Først bruger det parse_coord() til at transformere strings til en liste af lister.
+    # Så tager det hver element i listen, og beregne distance til den næste element, ved at bruge
+    # Haversine funktion. Returnerer distance mellem ALLE koordinater. 
     total = 0 #Starts med 0 km
     coordinates = parse_coord(coordinates)
-    for i in range(len(coordinates) - 1): #Loop til hver koordinatpar
+    for i in range(len(coordinates) - 1): # Loop til hver koordinatpar
         lat1, lon1 = coordinates[i]
         lat2, lon2 = coordinates[i + 1]
         total += haversine(lat1, lon1, lat2, lon2)
@@ -121,12 +113,12 @@ def total_distance(coordinates):
 
 
 def parse_coord(coordinates): 
-# parse_coord:
-# Transformere en list af strings med koordinater, adskilt af et komma, til en liste af lister,
-# hvor hvert koordinatpar er opdelt i to elementer (latitude og longitude), og hvor komma er fjernet.
-# Eksempel:
-#     Input: ['55.69186,12.55446', '55.69185,12.55443', '55.19185,12.35443']
-#     Output: [['55.69186', '12.55446'], ['55.69185', '12.55443'], ['55.19185', '12.35443']]
+    # parse_coord:
+    # Transformere en list af strings med koordinater, adskilt af et komma, til en liste af lister,
+    # hvor hvert koordinatpar er opdelt i to elementer (latitude og longitude), og hvor komma er fjernet.
+    # Eksempel:
+    #     Input: ['55.69186,12.55446', '55.69185,12.55443', '55.19185,12.35443']
+    #     Output: [['55.69186', '12.55446'], ['55.69185', '12.55443'], ['55.19185', '12.35443']]
     newcoord = []
     for item in coordinates:
         split = item.split(",") # split on commas in string
@@ -136,25 +128,24 @@ def parse_coord(coordinates):
 coordinates = [] 	#Start uden koordinater
 kmcount 	= 0 	#Starter med 0 km
 
-# Batteri funktioner:
-#   Reads the battery from a converted ADC value
-#   Input : none
-#   Output: the battery voltage
-# 	Kilde: Bo Hansen / Undervisning ILS 1/08
 
-bat_adc = ADC(Pin(pin_adc_bat)) # The battery status ADC object
-bat_adc.atten(ADC.ATTN_11DB)  	# Full range: 3,3 V
 
 def read_battery_voltage_avg64():  # Option: average over N times to remove fluctuations
+    # Batteri funktion:
+    # Reads the battery from a converted ADC value
+    # Input : none
+    # Output: the battery voltage
+    # Kilde: Bo Hansen / Undervisning ILS 1/08
     adc_val = 0
     for i in range(64):
         adc_val += bat_adc.read()
     voltage = bat_scaling * (adc_val >> 6)  # >> fast divide by 64
     return voltage
 
-# Læser lokation til Adafruit:
-# Kilde: Kevin L. - Modificeret til at returnere kun lat + lon, hvis vi skal beregne distancen, ved hjælp af argumenter
+
 def get_adafruit_gps(type_data):
+    # Læser GPS lokation til Adafruit:
+    # Kilde: Kevin Lindemark - Modificeret til at returnere kun lat + lon, hvis vi skal beregne distancen, ved hjælp af argumenter
     speed = lat = lon = None  # Opretter variabler med None som værdi
     if gps.receive_nmea_data():
         # hvis der er kommet end bruggbar værdi på alle der skal anvendes
@@ -168,10 +159,10 @@ def get_adafruit_gps(type_data):
             speed = str(gps.get_speed())
             lat = str(gps.get_latitude())
             lon = str(gps.get_longitude())
-            # returnerer data med adafruit gps format
+            # returnerer data med adafruit gps format eller kun (lat , long)
             if type_data == "Location":
                 return speed + "," + lat + "," + lon + "," + "0.0"
-            elif type_data == "Distance":
+            elif type_data == "Distance": # Til at beregne distancen:
                 return lat + "," + lon              
                            
         else:  # hvis ikke både hastighed, latitude og longtitude er korrekte
@@ -199,9 +190,9 @@ while True:
 
                 
         if len(coordinates) > 1: #Når der er flere koordinater i listen, beregner det distancen
-            print(f"Beregner distance mellem koordinater: {coordinates}")
+            print(f"Beregner distance {len(coordinates)} koordinater: {coordinates}")
             
-            distance = round(total_distance(coordinates), 8) #TODO: kun 2 decimaler.
+            distance = round(total_distance(coordinates), 4) #TODO: kun 2 decimaler.
             print("Løbet distance:", distance, "mt")
  
             if distance > 100 and kmcount == 0: #Over 100 mt. / mindre end 1km: informere Adafruit
@@ -211,7 +202,7 @@ while True:
                 if kmcount == 0:
                     print(f"Løbet distance: {distance} mt.")
             elif kmcount != 0:
-                    distance_km_mt = distance * 1000 + kmcount #Distance i mt (gange 1000 til KM) + distance i KM
+                    distance_km_mt = (distance / 1000) + kmcount #Distance i mt (/ 1000 til KM) + distance i KM
                     print(f"Løbet KM i alt: {distance_km_mt}")
             sleep(4)
 
@@ -266,7 +257,7 @@ while True:
         if len(mqtt.besked) != 0: 	# Her nulstilles indkommende beskeder
             mqtt.besked = ""            
         mqtt.sync_with_adafruitIO() # igangsæt at sende og modtage data med Adafruit IO             
-        print(".", end = '') 		# printer et punktum til shell, uden et enter        
+        print(" ", end = '') 		# printer et punktum til shell, uden et enter        
 
     # Stopper programmet når der trykkes Ctrl + c
     except KeyboardInterrupt:
