@@ -142,11 +142,11 @@ while True:
 
                 
         if coordinates: #Når der er flere koordinater i listen, beregner det distancen
-            print("Start total_distance function: ", coordinates) #Debug info
+            print("Beregne distance mellem koordinater: ", coordinates) #Debug info
 
         # Calculate and print the total distance
             distance = round(total_distance(coordinates), 8) #TODO: kun 2 decimaler. Debug: 8
-            print("Total Distance:", distance, "mt")
+            print("Løbet distance:", distance, "mt")
  
             if distance > 100: #Over 100 mt.: informere Adafruit
                 print(f"Distance over 100: sender besked til adafruit. {distance}")
@@ -156,14 +156,14 @@ while True:
                     sleep(4)
 
             if distance > 1000: #Distance over 1000:
-                print(f"Distance over 1000 m. Spiller lyd, sende til adafruit og reset count. {distance} mt.")
+
                 buzzer.duty(512) #Spiller lyd
                 buzzer.freq(500)
                 sleep(0.2)
                 buzzer.duty(0)
                 kmcount += (distance / 1000)
-                print("Km. count: ", kmcount)
-                distance = 0 #Reset distance count
+                print(f"Distance over 1000 m. Spiller lyd, sender til adafruit og reset count. {distance} mt. Distance i KM: {kmcount}")
+                distance = 0 #Reset distance(mt) count
                 
                 if send_distance == 1:
                     mqtt.web_print(kmcount, 'JavierVo/feeds/distancekm') #Distance i KM til feed kmcount

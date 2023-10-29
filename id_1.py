@@ -89,7 +89,7 @@ while True:
         # Hvis funktionen returnere en string er den True ellers returnere den False
         gps_data = get_adafruit_gps()
         if gps_data:  # hvis der er korrekt data så send til adafruit
-            print(f"\ngps_data er: {gps_data}")  # Viser GPS data
+            print(f"\nLokation: {gps_data} (speed, lat, long, alt)")  # Viser GPS data
             mqtt.web_print(
                 gps_data, "JavierVo/feeds/mapfeed/csv"
             )  # Besked til Adafruit med gps data, til feed mapfeed
@@ -101,16 +101,17 @@ while True:
 
         # Opdatering af batteriniveau til Adafruit i feed "batteryfeed"
         if send_battery == 1:  # Sender batteriniveau KUN hvis vi aktivere den
-            battery_percent = round(read_battery_voltage_avg64() / 4.2 * 100, 2)
+            
+            battery_percent = round(read_battery_voltage_avg64() / 4.2 * 100, 2) #Beregner batteri niveau ud fra ADC værdi / maks. spændning
             if battery_percent > 100:
                 print("Error: Battery over 100%")
             elif battery_percent < 0:
                 print("Error: Battery under 0%")
             else:
-                print(battery_percent)  # Viser det på shell 
+                print(f"Batteri niveau: {battery_percent}")  # Viser det på shell 
                 mqtt.web_print(
                     battery_percent, "JavierVo/feeds/batteryfeed"
-                )   # opdatere feed til Adafruit
+                )   # Sender besked til Adafruit med batteri niveau (i feed batteryfeed)
         led1.on()   # YELLOW LED Blink
         sleep(2.5)  # Venter 2x2.5 sek. (begrænse af Adafruit til at modtage beskeder)
         led1.off()  # YELLOW LED Blink
