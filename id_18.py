@@ -41,8 +41,8 @@ from math import radians, sin, cos, sqrt, asin 	# Moduler til Haversine formel
 
 #########################################################################
 # CONFIGURATION HARDWARE
-YELLOW_PIN = 15  	# PIN nummer til yellow LED - for at vise at programmet kører
-BUZZ_PIN = 33 		# Buzzer PIN
+YELLOW_PIN 	= 15  	# PIN nummer til yellow LED - for at vise at programmet kører
+BUZZ_PIN 	= 33 	# Buzzer PIN
  
 #########################################################################
 # CONFIGURATION PROGRAM
