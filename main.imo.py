@@ -58,8 +58,8 @@ pin_adc_bat = 35  			# The battery status input pin
 bat_scaling = 4.2 / 3413  	# The battery voltage divider ratio, replace <adc_4v2> with ADC value when 4,2 V applied
 
 # Opdatering til Adafruit 
-send_battery 		= 1		# Hvis 1: sender batteri percentage til Adafruit
-send_location_data 	= 1 	# Hvis 1: sender lokation opdatering til Adafruit
+send_battery 		= 0		# Hvis 1: sender batteri percentage til Adafruit
+send_location_data 	= 0 	# Hvis 1: sender lokation opdatering til Adafruit
 send_distance 		= 1 	# Hvis 1: sender distancer til Adafruit. 
 
 # Adafruit feeds config:
@@ -87,7 +87,7 @@ coordinates = [] 	# Start uden koordinater
 kmcount 	= 0 	# Starter med 0 km
 taklinger = 0		# 
 reported_taklinger = 0
-
+distance = 0
 #########################################################################
 # FUNCTIONS
 # # Distance / koordinater
@@ -132,7 +132,7 @@ def parse_coord(coordinates):
     newcoord = []
     for item in coordinates:
         split = item.split(",") # split on commas in string
-        newcoord.append([float(split[1]),float(split[2])]) # Hver element i en list, er en list af koordinater
+        newcoord.append([float(split[1]),float(split[2])]) # Hver element i en list, er en list af koordinater. Elementer 1 og 2 er lat / long. 
     return newcoord # Returnere en list af koordinater
 
 def read_battery_voltage_avg64():  # Option: average over N times to remove fluctuations
@@ -148,9 +148,9 @@ def read_battery_voltage_avg64():  # Option: average over N times to remove fluc
     return voltage
 
 
-def get_adafruit_gps(type_data):
+def get_adafruit_gps():
     # Læser GPS lokation til Adafruit:
-    # Kilde: Kevin Lindemark - Modificeret til at returnere kun lat + lon, hvis vi skal beregne distancen, ved hjælp af argumenter
+    # Kilde: Kevin Lindemark 
     speed = lat = lon = None  # Opretter variabler med None som værdi
     if gps.receive_nmea_data():
         # hvis der er kommet end bruggbar værdi på alle der skal anvendes
@@ -164,12 +164,8 @@ def get_adafruit_gps(type_data):
             speed = str(gps.get_speed())
             lat = str(gps.get_latitude())
             lon = str(gps.get_longitude())
-            # returnerer data med adafruit gps format eller kun (lat , long)
-#             if type_data == "Location": # TODO: remove? skal testes 
             return speed + "," + lat + "," + lon + "," + "0.0"
-#             elif type_data == "Distance": # Til at beregne distancen:
-#                 return lat + "," + lon              
-                           
+           
         else:  # hvis ikke både hastighed, latitude og longtitude er korrekte
             print(
                 f"Invalid GPS data: \nspeed: {speed} / latitude: {lat} / longtitude: {lon}"
@@ -179,6 +175,11 @@ def get_adafruit_gps(type_data):
     else:
         return False
     
+def spill_lyd():
+    buzzer.duty(512) #Spiller lyd
+    buzzer.freq(500)
+    sleep(0.2)
+    buzzer.duty(0)
 
 def taklinger_counter(): 
     # Kører i anden thread
@@ -205,71 +206,130 @@ _thread.start_new_thread(taklinger_counter, ()) #Starter tackling detektion funk
 
 while True:
     try:
+        #ID 6: Taklinger
         if taklinger != reported_taklinger: #Tjekker om der er flere taklinger end sidste sendt til Adafruit
             mqtt.web_print(taklinger, taklinger_feed) #Informere Adafruit on antal taklinger
             print("Sende tacklinger: ", taklinger)
             reported_taklinger = taklinger
             sleep(3.5)
+            
+            
+            
+            
+            
+            
+            
+            
+            
         
+        #ID 8: Distance måling
         # Hvis funktionen returnere en string er den True ellers returnere den False
         gps_data = get_adafruit_gps("Distance")
+        
+        sleep(2)
         if gps_data: 
-#             print(f'\nSidste koordinater: {gps_data}') #Viser GPS data i shell 
-            coordinates.append(gps_data) #Tilføjer koordinater til list "coordinates"
+            coordinates.append(gps_data) #Tilføjer koordinater til listen "coordinates"
             
-            # Sende lokation til kort Adafruit: (Skal testes)
+            #ID 1: Lokation til Adafruit kort
             print(f"\nLokation til Adafruit kort: {gps_data} (lat, long)")  # Viser GPS data
             if send_location_data == 1:
-#                 gps_map_data = (0,gps_data,0)
-#                 print ("Sending data to AF: ", gps_data)
-                mqtt.web_print(gps_data, map_feed)  # Besked til Adafruit med gps data, til feed mapfeed
+                mqtt.web_print(gps_data, map_feed)  # Besked til Adafruit med gps data, til feed map_feed
                 sleep(4)
-            
-            led1.off() #Blinker LED når der kommer GPS data. 
-            sleep(0.25) #TODO: remove?
-            led1.on()
-      
+                
+
         if len(coordinates) > 1: #Når der er flere koordinater i listen, beregner det distancen
-            #TODO: and < 20? så tæller i KM? begrænse ram 
             print(f"Beregner distance {len(coordinates)} koordinater: {coordinates}")
             
-            distance = round(total_distance(coordinates), 4) #TODO: kun 2 decimaler.
-            print("Løbet distance:", distance, "mt")
- 
-            if distance > 10 and kmcount == 0: #Over 100 mt. / mindre end 1km: informere Adafruit
-                print(f"Distance over 100: sender besked til adafruit. {distance}")
-                if send_distance == 1:
-                    mqtt.web_print(distance, distance_feed) #Feed distance
-                    sleep(4)
-                if kmcount == 0:
-                    print(f"Løbet distance: {distance} mt.")
-            elif kmcount != 0:
-                    distance_km_mt = (distance / 1000) + kmcount #Distance i mt (/ 1000 til KM) + distance i KM
-                    print(f"Løbet KM i alt: {distance_km_mt}")
+        distance = round(total_distance(coordinates), 4) #TODO: kun 2 decimaler.
             
+        if distance < 10 and kmcount == 0:
+            print ("Distance UNDER 100 meters. Informerer IKKE Adafruit. Distance: ", distance, "meters.")
+            
+        if distance > 10 and distance < 100 and kmcount == 0:
+            print ("Distance over 100 meters. Distance: ", distance, "meters.")
+            if send_distance == 1:
+                mqtt.web_print(distance, distance_feed) #Feed distance
+                print("Informing distance", distance)
+                sleep(4)
+                
+        if distance >= 100:
+            print("Distance over 1 km. Spiller lyd og informere AF. Distance: ", distance)
+            spill_lyd()
+            if send_distance == 1:
+                mqtt.web_print(kmcount, distance_km_feed) # Distance i KM til feed kmcount
+                print("Informing distance", distance)
+                sleep(4)
+            
+            kmcount = kmcount + (distance / 1000)
+            distance = 0
+            coordinates.clear() 
+            
+        if kmcount != 0:
+            #Når vi har løbet over 1km men mindre en 999 mt over.
+            kmcount = kmcount + (distance / 1000)
+            if kmcount > 1:
+                print("Distance km: ", kmcount)
+            if send_distance == 1:
+                mqtt.web_print(kmcount, distance_km_feed) # Distance i KM til feed kmcount
+                sleep(4)
+                print("Informing distance", kmcount)
+                    
+            print("Distance meters: ", kmcount * 1000)
+            distance = 0
+                  
+            
+        if len(coordinates) > 4: #Maks. 4 koordinater af gang, pga. mangel af resourser i ESP32
+            kmcount =  distance / 1000 + kmcount
+            print("Clear koordinater. Distance: ", kmcount, "km.")
 
-            if distance > 100: #Distance over 1000: 
-                buzzer.duty(512) #Spiller lyd
-                buzzer.freq(500)
-                sleep(0.2)
-                buzzer.duty(0)
-                kmcount += (distance / 1000) #Opdaterer km count 
-                print(f"Distance over 1000 m. Spiller lyd, sender til adafruit og reset count. Distance i KM: {kmcount}")
-                distance = 0 # Reset distance(mt) count
-                
-                if send_distance == 1:
-                    mqtt.web_print(kmcount, distance_km_feed) # Distance i KM til feed kmcount
-                    sleep(4)
-                coordinates.clear() #Reset list
-                
-        # Send lokation til Adafruit: TODO: remove?
-        # Hvis funktionen returnere en string er den True ellers returnere den False
-#         gps_location_data = get_adafruit_gps("Location")
-#         if gps_location_data:  # hvis der er korrekt data så send til adafruit
-#             print(f"\nLokation til Adafruit kort: {gps_location_data} (speed, lat, long, alt)")  # Viser GPS data
-#             if send_location_data == 1:
-#                 mqtt.web_print(gps_location_data, map_feed)  # Besked til Adafruit med gps data, til feed mapfeed
+            coordinates.clear()
+            coordinates = []
+            
+            
+            
+            
+            
+            
+            
+            
+            
+#             if distance < 10 and kmcount == 0:
+#                 print("Løbet distance:", distance, "mt") #Mindre en 100 meter. Sender ikke til Adafruit
+# 
+#         if distance > 10 and kmcount == 0: #Over 100 mt. / mindre end 1km: informere Adafruit
+#             print(f"Distance over 100: sender besked til adafruit. {distance}")
+#             if send_distance == 1:
+#                 mqtt.web_print(distance, distance_feed) #Feed distance
 #                 sleep(4)
+#                 if kmcount == 0:
+#                     print(f"Løbet distance: {distance} mt.")
+#             elif kmcount != 0:
+#                     distance_km_mt = (distance / 1000) + kmcount #Distance i mt (/ 1000 til KM) + distance i KM
+#                     print(f"Løbet KM i alt: {distance_km_mt}")
+#         if len(coordinates) > 10:
+#             #Max 10 koordinater for at beregne. Ellers bruger det for meget ressourcer.
+#             distance = round(total_distance(coordinates), 4)
+#             coordinates = []
+#             print("10 koordinater: opsummerer distance. ", distance, "meters. ")
+# 
+#         if distance > 100: #Distance over 1000: 
+#                 
+#                 kmcount += (distance / 1000) #Opdaterer km count 
+#                 print(f"Distance over 1000 m. Spiller lyd, sender til adafruit og reset count. Distance i KM: {kmcount}")
+#                 distance = 0 # Reset distance(mt) count
+#                 spill_lyd()
+#                 if send_distance == 1:
+#                     mqtt.web_print(kmcount, distance_km_feed) # Distance i KM til feed kmcount
+#                     sleep(4)
+#                 coordinates.clear() #Reset list
+                
+                
+                
+                
+                
+                
+                
+                
         
         # Opdatering af batteriniveau til Adafruit i feed "batteryfeed"
         if send_battery == 1:  # Config            
