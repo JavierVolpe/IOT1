@@ -58,8 +58,8 @@ pin_adc_bat = 35  			# The battery status input pin
 bat_scaling = 4.2 / 3413  	# The battery voltage divider ratio, replace <adc_4v2> with ADC value when 4,2 V applied
 
 # Opdatering til Adafruit 
-send_battery 		= 0		# Hvis 1: sender batteri percentage til Adafruit
-send_location_data 	= 0 	# Hvis 1: sender lokation opdatering til Adafruit
+send_battery 		= 1		# Hvis 1: sender batteri percentage til Adafruit
+send_location_data 	= 1 	# Hvis 1: sender lokation opdatering til Adafruit
 send_distance 		= 1 	# Hvis 1: sender distancer til Adafruit. 
 
 # Adafruit feeds config:
@@ -189,17 +189,21 @@ def taklinger_counter():
     taklinger = 0
     state = 0
     while True:
-        imu_data = imu.get_values()
-        imudata = imu_data.get("acceleration z")
-        sleep(0.01)
-        if  imudata <= -31000 or imudata >= 31000 and state == 0:
-                print(imudata)
-                taklinger += 1
-                state = 1
-                print(taklinger)
-                sleep(2)
-        elif imudata >= -10000 or imudata <= 10000 and state == 1:
-            state = 0
+        try:
+            imu_data = imu.get_values()
+            imudata = imu_data.get("acceleration z")
+            sleep(0.01)
+            if  imudata <= -31000 or imudata >= 31000 and state == 0:
+                    print(imudata)
+                    taklinger += 1
+                    state = 1
+                    print(taklinger)
+                    sleep(2)
+            elif imudata >= -10000 or imudata <= 10000 and state == 1:
+                state = 0
+        except:
+            print("Error: IMU not connected. ")
+            break
             
 # # # Program
 _thread.start_new_thread(taklinger_counter, ()) #Starter tackling detektion funktion i nyt thread
@@ -224,7 +228,7 @@ while True:
         
         #ID 8: Distance måling
         # Hvis funktionen returnere en string er den True ellers returnere den False
-        gps_data = get_adafruit_gps("Distance")
+        gps_data = get_adafruit_gps()
         
         sleep(2)
         if gps_data: 
@@ -241,8 +245,8 @@ while True:
             print(f"Beregner distance {len(coordinates)} koordinater: {coordinates}")
             
         distance = round(total_distance(coordinates), 4) #TODO: kun 2 decimaler.
-            
-        if distance < 10 and kmcount == 0:
+        
+        if distance > 10 and kmcount == 0:
             print ("Distance UNDER 100 meters. Informerer IKKE Adafruit. Distance: ", distance, "meters.")
             
         if distance > 10 and distance < 100 and kmcount == 0:
@@ -354,3 +358,5 @@ while True:
         print('Ctrl-C pressed...exiting')
         mqtt.c.disconnect()
         mqtt.sys.exit()
+
+
