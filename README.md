@@ -4,7 +4,7 @@
 # KEA 
 
 
-Emil Fabricius Schlosser
-Javier Alejandro Volpe
-Jonathan Steenstrup
-Morten Hamborg Johansen
+# Emil Fabricius Schlosser
+# Javier Alejandro Volpe
+# Jonathan Steenstrup
+# Morten Hamborg Johansen
