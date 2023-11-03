@@ -13,20 +13,17 @@ from time import sleep							# Sleep funktion
 from gps_bare_minimum import GPS_Minimum 		# GPS functioner af Kevin Lindemark 
 from math import radians, sin, cos, sqrt, asin 	# Moduler til Haversine formel 
 from mpu6050 import MPU6050						# IMU sensor MPU6050
-import _thread									#Multi-threading support
+import _thread									# Multi-threading support
 
 #########################################################################
 # CONFIGURATION HARDWARE
 YELLOW_PIN 	= 15  	# PIN nummer til yellow LED - for at vise at programmet kører
 BUZZ_PIN 	= 33 	# Buzzer PIN
- 
-#########################################################################
-# CONFIGURATION PROGRAM
-
-# GPS
 gps_port 	= 2    			# ESP32 UART port, Educaboard ESP32 default UART port
 gps_speed 	= 9600    		# UART speed, defauls u-blox speed
 
+#########################################################################
+# CONFIGURATION PROGRAM
 # Battery
 pin_adc_bat = 35  			# The battery status input pin
 bat_scaling = 4.2 / 3413  	# The battery voltage divider ratio, replace <adc_4v2> with ADC value when 4,2 V applied
@@ -36,8 +33,8 @@ send_battery 		= 1		# Hvis 1: sender batteri percentage til Adafruit
 send_location_data 	= 1 	# Hvis 1: sender lokation opdatering til Adafruit
 send_distance 		= 1 	# Hvis 1: sender distancer til Adafruit. 
 send_taklinger 		= 1 	# Hvis 1: sender antal af taklinger
+
 # Adafruit feeds config:
-distance_feed 		= "JavierVo/feeds/distance"
 distance_km_feed	= "JavierVo/feeds/distancekm"
 map_feed 			= "JavierVo/feeds/mapfeed/csv"
 battery_feed 		= "JavierVo/feeds/batteryfeed"
@@ -150,7 +147,7 @@ def get_adafruit_gps():
         return False
     
 def spill_lyd():
-    buzzer.duty(512) #Spiller lyd
+    buzzer.duty(512) 
     buzzer.freq(500)
     sleep(0.2)
     buzzer.duty(0)
@@ -162,7 +159,6 @@ def taklinger_counter():
     global taklinger
     if not taklinger:
         taklinger = 0
-#     taklinger = 0
     state = 0
     from mpu6050 import MPU6050
     from machine import I2C
@@ -180,7 +176,7 @@ def taklinger_counter():
             elif imudata >= -10000 or imudata <= 10000 and state == 1:
                 state = 0
         except:
-            print("Error: Missing connection to IMU. ")
+            print("Warning: Missing connection to IMU. ")
             continue 
             
 # # # Program
@@ -193,7 +189,7 @@ while True:
             mqtt.web_print(taklinger, taklinger_feed) #Informere Adafruit on antal taklinger
             print("Sende tacklinger: ", taklinger)
             reported_taklinger = taklinger
-            sleep(3.5)
+            sleep(4)
         
         #ID 8: Distance måling
         # Hvis funktionen returnere en string er den True ellers returnere den False
@@ -213,18 +209,16 @@ while True:
             print(f"Beregner distance {len(coordinates)} koordinater: {coordinates}")
             
         distance = round(total_distance(coordinates), 4) #TODO: kun 2 decimaler.
-        
-        if distance > 10 and kmcount == 0:
-            print ("Distance UNDER 100 meters. Informerer IKKE Adafruit. Distance: ", distance, "meters.")
-            
-        if distance > 10 and distance < 100 and kmcount == 0:
+                    
+        if distance > 10 and distance < 1000 and kmcount == 0:
             print ("Distance over 100 meters. Distance: ", distance, "meters.")
             if send_distance == 1:
-                mqtt.web_print(distance, distance_feed) #Feed distance
-                print("Informing distance", distance)
+                distance_km = distance / 1000
+                mqtt.web_print(distance_km, distance_km_feed) #Feed distance
+                print("Informing distance:", distance, "meters.")
                 sleep(4)
                 
-        if distance >= 100:
+        if distance >= 1000: 
             print("Distance over 1 km. Spiller lyd og informere AF. Distance: ", distance)
             spill_lyd()
             if send_distance == 1:
@@ -249,45 +243,13 @@ while True:
             print("Distance meters: ", kmcount * 1000)
             distance = 0
             
-        if len(coordinates) > 4: #Maks. 4 koordinater af gang, pga. mangel af resourser i ESP32
+        if len(coordinates) > 4: #Maks. 4 koordinater af gang, pga. mangel af memory i ESP32
             kmcount =  distance / 1000 + kmcount
             print("Clear koordinater. Distance: ", kmcount, "km.")
-
             coordinates.clear()
             coordinates = []
             
-            
-#             if distance < 10 and kmcount == 0:
-#                 print("Løbet distance:", distance, "mt") #Mindre en 100 meter. Sender ikke til Adafruit
-# 
-#         if distance > 10 and kmcount == 0: #Over 100 mt. / mindre end 1km: informere Adafruit
-#             print(f"Distance over 100: sender besked til adafruit. {distance}")
-#             if send_distance == 1:
-#                 mqtt.web_print(distance, distance_feed) #Feed distance
-#                 sleep(4)
-#                 if kmcount == 0:
-#                     print(f"Løbet distance: {distance} mt.")
-#             elif kmcount != 0:
-#                     distance_km_mt = (distance / 1000) + kmcount #Distance i mt (/ 1000 til KM) + distance i KM
-#                     print(f"Løbet KM i alt: {distance_km_mt}")
-#         if len(coordinates) > 10:
-#             #Max 10 koordinater for at beregne. Ellers bruger det for meget ressourcer.
-#             distance = round(total_distance(coordinates), 4)
-#             coordinates = []
-#             print("10 koordinater: opsummerer distance. ", distance, "meters. ")
-# 
-#         if distance > 100: #Distance over 1000: 
-#                 
-#                 kmcount += (distance / 1000) #Opdaterer km count 
-#                 print(f"Distance over 1000 m. Spiller lyd, sender til adafruit og reset count. Distance i KM: {kmcount}")
-#                 distance = 0 # Reset distance(mt) count
-#                 spill_lyd()
-#                 if send_distance == 1:
-#                     mqtt.web_print(kmcount, distance_km_feed) # Distance i KM til feed kmcount
-#                     sleep(4)
-#                 coordinates.clear() #Reset list
-                
-      
+
         # ID 1
         # Opdatering af batteriniveau til Adafruit i feed "batteryfeed"
         if send_battery == 1:  # Config            
