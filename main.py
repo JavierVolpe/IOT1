@@ -176,11 +176,11 @@ def taklinger_counter():
             elif imudata >= -10000 or imudata <= 10000 and state == 1:
                 state = 0
         except:
-#             print("Warning: Missing connection to IMU. ") TODO
+
             continue 
             
 # # # Program
-# _thread.start_new_thread(taklinger_counter, ()) #Starter tackling detektion funktion i nyt thread TODO
+_thread.start_new_thread(taklinger_counter, ()) #Starter tackling detektion funktion i nyt thread
 
 while True:
     try:
